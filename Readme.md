@@ -1,12 +1,12 @@
-###基于mockjs的webpack插件
+### 基于mockjs的webpack插件
 
 解决webpack build后没有mock数据的问题
 
-###安装
+### 安装
 
 	npm i webpack-mockjs-plugin
 
-###使用
+### 使用
 
 在webpack.config.js中配置
 
