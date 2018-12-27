@@ -23,7 +23,8 @@
 			output: '/cgi-bin/',
 			ext: "txt"
 		}], {
-			config: './build/mockConfig.js' //自定义mock规则路径
+			config: './build/mockConfig.js', //自定义mock规则路径
+			watch: false  //是否开启文件变化监听
 		})
 	}
 

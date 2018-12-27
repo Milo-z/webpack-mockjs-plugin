@@ -3,106 +3,129 @@ const fs = require('fs');
 const Mock = require('mockjs');
 const setConfig = require('./config.js');
 
+let configOptions;
+
 function MockPlugin() {
-  let options = arguments[0];
-  let configOptions = arguments[1];
-  
-  //加载设置的mock规则
-  configOptions && setConfig(Mock, configOptions.config);
-  
-  if(!Array.isArray(options)) {
-	  options = [options];
-  }
+    let options = arguments[0];
+    configOptions = arguments[1];
 
-  options.forEach(function(item) {
-	  if(!item.from || !item.output) {
-		  throw("mock error arguments");
-		  return;
-	  } 
-  });
-  
-  
-  let apply = function(compiler) {
-    compiler.hooks.emit.tapAsync('MockPlugin', (compilation, callback) => {
+    //加载设置的mock规则
+    configOptions && setConfig(Mock, configOptions.config);
 
-	  emit(options, compilation, callback);
- 
+    checkOptions(options);
+
+    let apply = function(compiler) {
+        compiler.hooks.emit.tapAsync('MockPlugin', (compilation, callback) => {
+
+            emit(options, compilation, callback);
+
+        });
+    };
+
+    return {
+        apply: apply
+    };
+}
+
+//检查参数是否满足
+function checkOptions(options) {
+    if (!Array.isArray(options)) {
+        options = [options];
+    }
+
+    options.forEach(function(item) {
+        if (!item.from || !item.output) {
+            throw ("mock error arguments");
+        }
     });
-  }
-  
-  return  {
-	  apply: apply
-  }
 }
 
 //获取文件任务
 function emit(options, compilation, callback) {
-	
-	var tasks = [];
-	options.forEach(function(item) {
-		getTask(tasks, item, compilation);
-	});
-	
-	//编译完成
-	Promise.all(tasks).then(function () {
-		console.log("mock end");
-		callback();
-	});
-	
+
+    var tasks = [];
+    //添加任务清单
+    options.forEach(function(item) {
+        setTask(tasks, item, compilation);
+    });
+
+    //执行完任务，编译完成
+    Promise.all(tasks).then(function() {
+        console.log("mock end");
+        callback();
+    });
+
 }
 
 //获取编译任务
-function getTask(tasks, opObj, compilation) {
-	if(opObj.from) {
-		let filesPath = path.resolve(opObj.from);
-			
-		let writeUrl = opObj.output;
-		
-		
-		let stats = fs.statSync(filesPath);
-		let fileList;
-		
-		if(stats.isFile()) {
-			
-		} else if(stats.isDirectory()) {
-			fileList = fs.readdirSync(filesPath);
-		}
-		
-		fileList.forEach(function(file) {
-		
-			let fileStr = fs.readFileSync(path.join(filesPath,file), 'utf-8');
-			let filename = path.basename(file, path.extname(file));
-			filename = path.join(writeUrl, filename);
-			
-			if((opObj.ext && path.extname(file) == ("." + opObj.ext) ) || !opObj.ext) {
+function setTask(tasks, opObj, compilation) {
+    if (opObj.from) {
+        let filesPath = path.resolve(opObj.from);
 
-				fileStr = fileStr.replace(/^\s+|\s+$/g,"");
-				
-				fileObj = JSON.parse(fileStr);
-					
-				let data = Mock.mock(fileObj);
-				data = JSON.stringify(data);
-				tasks.push(Promise.resolve().then(function () {
-					webpackTo(filename, data, compilation);
-				}));
-			}
-			
-		});
-	}
+        let writeUrl = opObj.output;
+
+
+        let stats = fs.statSync(filesPath);
+        let fileList = [];
+
+        if (stats.isFile()) {
+
+        } else if (stats.isDirectory()) {
+            fileList = fs.readdirSync(filesPath);
+        }
+
+        fileList.forEach(function(file) {
+
+            let filePath = path.join(filesPath, file);
+            let fileStr = readFile(filePath);
+
+            //增加文件监听
+            if (configOptions.watch) {
+                compilation.fileDependencies.add(filePath);
+            }
+
+            let filename = path.basename(file, path.extname(file));
+            let fileObj;
+
+            filename = path.join(writeUrl, filename);
+
+            if ((opObj.ext && path.extname(file) == ("." + opObj.ext)) || !opObj.ext) {
+
+                fileStr = fileStr.replace(/^\s+|\s+$/g, "");
+                try {
+                    fileObj = JSON.parse(fileStr);
+                } catch (e) {
+                    fileObj = { "error": "parse error" + filename };
+                }
+
+
+                let data = Mock.mock(fileObj);
+                data = JSON.stringify(data, null, 2);
+                tasks.push(Promise.resolve().then(function() {
+                    webpackTo(filename, data, compilation);
+                }));
+            }
+
+        });
+    }
+}
+
+function readFile(filePath) {
+    let fileStr = fs.readFileSync(filePath, 'utf-8');
+    return fileStr;
 }
 
 //准备写文件
 function webpackTo(url, data, compilation) {
 
-	compilation.assets[url] = {
+    compilation.assets[url] = {
         source() {
-          return data;
+            return data;
         },
         size() {
-          return data.length;
+            return data.length;
         }
-      };
-	
-	
+    };
 }
+
 module.exports = MockPlugin;
