@@ -15,8 +15,8 @@
 	module.exports = {
 
 		new mockjsPlugin([{
-			from: './src/assets/goform/', //mock数据文件夹路径
-			output: '/goform/', //输出mock数据路径
+			from: './src/assets/goform/', //mock数据文件夹路径 
+			output: '/goform/[name]/index.html', //输出mock数据路径  支持name和ext 字段
 			ext: "txt" //mock数据文件后缀，编译完后会去除后缀
 		},{
 			from: './src/assets/cgi-bin/',
