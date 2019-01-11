@@ -1,6 +1,7 @@
 const path = require("path");
 const fs = require('fs');
 const Mock = require('mockjs');
+const glob = require('glob');
 const setConfig = require('./config.js');
 
 let configOptions;
@@ -12,11 +13,11 @@ function MockPlugin() {
     //加载设置的mock规则
     configOptions && setConfig(Mock, configOptions.config);
 
-    checkOptions(options);
-
+    options = checkOptions(options);
+	
     let apply = function(compiler) {
         compiler.hooks.emit.tapAsync('MockPlugin', (compilation, callback) => {
-
+			
             emit(options, compilation, callback);
 
         });
@@ -29,15 +30,19 @@ function MockPlugin() {
 
 //检查参数是否满足
 function checkOptions(options) {
+	
     if (!Array.isArray(options)) {
+		
         options = [options];
     }
-
+	
     options.forEach(function(item) {
         if (!item.from || !item.output) {
             throw ("mock error arguments");
         }
     });
+	
+	return options;
 }
 
 //获取文件任务
@@ -59,54 +64,55 @@ function emit(options, compilation, callback) {
 
 //获取编译任务
 function setTask(tasks, opObj, compilation) {
+
     if (opObj.from) { //配置了文件来源
-        let filesPath = path.resolve(opObj.from);
+
 
         let writeUrl = opObj.output;
 
-        let stats = fs.statSync(filesPath);
+       
         let fileList = [];
-
-        if (stats.isFile()) {
-
-        } else if (stats.isDirectory()) {
-            fileList = fs.readdirSync(filesPath);
-        }
-
+		
+		    fileList = glob.sync(opObj.from);
+		
+		
         fileList.forEach(function(file) {
-
+			
             //文件来源路径
-            let filePath = path.join(filesPath, file);
+            let filePath = file;
 
             //增加文件监听
             if (configOptions.watch) {
                 compilation.fileDependencies.add(filePath);
             }
+			
 
             //输出的文件路径
-            let outFilename = getOutFile(file, writeUrl, opObj.ext);
-
+            let outFilename = getOutFile(file, writeUrl);
+				
+			
+			
             let fileObj;
 
             //文件内容
             let fileStr = readFile(filePath);
-            if ((opObj.ext && path.extname(file) == ("." + opObj.ext)) || !opObj.ext) {
+            
 
-                fileStr = fileStr.replace(/^\s+|\s+$/g, "");
-                try {
-                    fileObj = JSON.parse(fileStr);
-                } catch (e) {
-                    fileObj = { "error": "parse error" + outFilename };
-                }
+			fileStr = fileStr.replace(/^\s+|\s+$/g, "");
+			try {
+				fileObj = JSON.parse(fileStr);
+			} catch (e) {
+				fileObj = { "error": "parse error" + outFilename };
+			}
 
-                //mock后的数据
-                let data = Mock.mock(fileObj);
-                data = JSON.stringify(data, null, 2);
+			//mock后的数据
+			let data = Mock.mock(fileObj);
+			data = JSON.stringify(data, null, 2);
 
-                tasks.push(Promise.resolve().then(function() {
-                    webpackTo(outFilename, data, compilation);
-                }));
-            }
+			tasks.push(Promise.resolve().then(function() {
+				webpackTo(outFilename, data, compilation);
+			}));
+            
 
         });
     }
@@ -118,19 +124,20 @@ function setTask(tasks, opObj, compilation) {
  *
  * @param {string} file     [文件名称]
  * @param {string} writeUrl [配置输出的文件字段]
- * @param {[string]} ext      [文件后缀]
  *
  * @return {string} [编译后的文件路径]
  */
-function getOutFile(file, writeUrl, ext) {
-    let filename = path.basename(file, path.extname(file));
-    let fileExt = path.extname(file).slice(1) || ext;
-
+function getOutFile(file, writeUrl) {
+    
+    let fileExt = path.extname(file);
+	let filename = path.basename(file, fileExt);
+	let dirname = path.basename(path.dirname(file));
+	
     //ext name字段匹配
-    if (/\[name\]|\[ext\]/.test(writeUrl)) {
-        filename = writeUrl.replace(/\[ext\]/, fileExt).replace(/\[name\]/, filename);
+    if (/\[name\]|\[dirname\]/.test(writeUrl)) {
+        filename = writeUrl.replace(/\[dirname\]/, dirname).replace(/\[name\]/, filename);
     } else {
-        filename = path.join(writeUrl, filename);
+        filename = path.join(writeUrl, filename + fileExt);
     }
 
     return filename;
